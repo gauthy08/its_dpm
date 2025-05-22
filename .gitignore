@@ -7,7 +7,7 @@ node_modules
 *.db
 *.xlsx
 *.csv
-*.pklR
+*.pkl
 node_modules
 *.pyc
 __pycache__
