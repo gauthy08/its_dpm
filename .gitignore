@@ -1,0 +1,17 @@
+node_modules
+*.pyc
+**pycache**
+.*
+!.gitignore
+!.experiments
+*.db
+*.xlsx
+*.csv
+*.pklR
+node_modules
+*.pyc
+__pycache__
+.*
+!.gitignore
+!.experiments*.db
+Files/*.csv
