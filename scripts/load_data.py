@@ -9,7 +9,7 @@ from .tree import Node
 
 # Lokale Module
 from database.db_manager import SessionLocal, create_tables
-from database.models import Konzept, ITSBaseData, DPM_datapoint, Template_Finrep, MergedData, Finrep_Y_reference, DPM_tableStructure
+from database.models import Konzept, ITSBaseData, DPM_datapoint, Template_Finrep, MergedData, Finrep_Y_reference, DPM_tableStructure, ITSBaseData_new
 
 
 
@@ -55,6 +55,83 @@ def load_csv_to_db(file_path):
     finally:
         session.close()
 
+        
+def load_hue_its():
+    hue_database = "its_analysedaten_wapr" #laut flo akuteller als its_analyse_test
+    table_name = "its_base_data"
+    """
+    Lädt Daten aus HUE und schreibt sie in die SQL-Datenbank.
+    """
+    # Spark-Session initialisieren
+    spark = SparkSession.builder\
+        .appName("hwc-app")\
+        .config("spark.security.credentials.hiveserver2.enabled", "false")\
+        .config("spark.datasource.hive.warehouse.read.via.llap", "false")\
+        .config("spark.datasource.hive.warehouse.read.jdbc.mode", "client")\
+        .config("spark.sql.hive.hiveserver2.jdbc.url",
+                "jdbc:hive2://anucdp-mgmt-01.w.oenb.co.at:2181,anucdp-mgmt-02.w.oenb.co.at:2181,anucdp-mgmt-03.w.oenb.co.at:2181/;"
+                "serviceDiscoveryMode=zooKeeper;zooKeeperNamespace=hiveserver2;trustStoreType=jks;ssl=true")\
+        .config("spark.yarn.historyServer.address", "https://anucdp-mgmt-02.w.oenb.co.at")\
+        .config("spark.sql.hive.hiveserver2.jdbc.url.principal", "hive/_HOST@AD.OENB.CO.AT")\
+        .config("spark.jars",
+                "/runtime-addons/spark332-7190-1202-b75-ht9wmb/opt/spark/optional-lib/hive-warehouse-connector-assembly.jar")\
+        .getOrCreate()
+
+    # HiveWarehouseSession initialisieren
+    hwc = HiveWarehouseSession.session(spark).build()
+    hwc.setDatabase(hue_database)
+
+    # Daten aus HUE abfragen
+    filtered_rows = hwc.sql(f"SELECT * FROM {hue_database}.{table_name}")
+    data = filtered_rows.collect()
+
+    # In Pandas DataFrame umwandeln
+    pandas_df = pd.DataFrame([row.asDict() for row in data], columns=filtered_rows.columns)
+
+    #Ausgabe der bestehenden Taxanomy codes 
+    print("Es bestehen folgende Taxonomy Codes: ")
+    print(pandas_df["taxonomy_code"].unique().tolist())
+    print("In diesem Schritt werden lediglich Einträge von FINREP_3.2.1 und COREP_3.2 geladen")
+    
+    #filter auf FINREP_3.2.1 COREP_3.2
+    pandas_df = pandas_df[pandas_df["taxonomy_code"].isin(["FINREP_3.2.1", "COREP_3.2"])]
+
+    
+    # Verbindung zur Datenbank herstellen
+    session = SessionLocal()
+    try:
+        # DataFrame-Zeilen iterieren und in die Datenbank einfügen
+        for _, row in pandas_df.iterrows():
+            its_data = ITSBaseData_new(
+                datapoint=row['datapoint'],
+                ko=row['ko'],
+                taxonomy_code=row['taxonomy_code'],
+                template_code=row['template_code'],
+                template_label=row['template_label'],
+                module_code=row['module_code'],
+                module_gueltig_von=row['module_gueltig_von'] if pd.notnull(row['module_gueltig_von']) else None,
+                module_gueltig_bis=row['module_gueltig_bis'] if pd.notnull(row['module_gueltig_bis']) else None,
+                table_code=row['table_code'],
+                table_name=row['table_name'],
+                criteria=row['criteria'],
+                x_axis_rc_code=row['x_axis_rc_code'],
+                x_axis_name=row['x_axis_name'],
+                y_axis_rc_code=row['y_axis_rc_code'],
+                y_axis_name=row['y_axis_name'],
+                z_axis_rc_code=row['z_axis_rc_code'],
+                z_axis_name=row['z_axis_name']
+            )
+            session.add(its_data)
+
+        # Änderungen speichern
+        session.commit()
+        print("Daten erfolgreich in die Datenbank geschrieben.")
+    except Exception as e:
+        print(f"Fehler beim Schreiben in die Datenbank: {e}")
+        session.rollback()
+    finally:
+        session.close()
+        
 
 def load_hue_data_to_db():
     hue_database = "its_analyse_test"
@@ -272,7 +349,8 @@ def load_tablestructurehierarchy(file_path):
                        dtype={'ComponentCode': str, 'Level': str, 'x_axis_rc_code': str, 'y_axis_rc_code': str})
     
     # 2) Nach TaxonomyCode = "FINREP 3.2.1" filtern
-    df = df[df['TaxonomyCode'] == "FINREP 3.2.1"]
+    #df = df[df['TaxonomyCode'] == "FINREP 3.2.1"]
+    df = df[df['TaxonomyCode'] == "COREP 3.2"]
 
     # 3) Alle relevanten TableCodes ermitteln
     all_table_codes = df['TableCode'].unique()
@@ -337,7 +415,7 @@ def load_tablestructurehierarchy(file_path):
         print("  ", k)
 
     # 7) Alles in ein einziges Pickle-File schreiben
-    pickle_path = "baumstruktur.pkl"
+    pickle_path = "baumstruktur_COREP_3_2.pkl"
     with open(pickle_path, "wb") as f:
         pickle.dump(all_trees, f)
     print(f"\nAlle Bäume wurden in '{pickle_path}' gespeichert.")

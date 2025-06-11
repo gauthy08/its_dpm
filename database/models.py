@@ -51,6 +51,29 @@ class ITSBaseData(Base):
     z_axis_rc_code = Column(String)
     z_axis_name = Column(String)
     
+class ITSBaseData_new(Base):
+    __tablename__ = 'ITSBaseData_new'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)  # Optional: Ein Primärschlüssel, falls gewünscht
+    datapoint = Column(Integer)
+    ko = Column(String)
+    taxonomy_code = Column(String)
+    template_code = Column(String)
+    template_label = Column(String)
+    module_code = Column(String)
+    module_gueltig_von = Column(DateTime)
+    module_gueltig_bis = Column(DateTime)
+    table_code = Column(String)
+    table_name = Column(String)
+    criteria = Column(String)
+    x_axis_rc_code = Column(String)
+    x_axis_name = Column(String)
+    y_axis_rc_code = Column(String)
+    y_axis_name = Column(String)
+    z_axis_rc_code = Column(String)
+    z_axis_name = Column(String)
+    
+    
 class DPM_datapoint(Base): 
     __tablename__ = 'DPM_data_points'
     

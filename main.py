@@ -1,6 +1,6 @@
 from database.db_manager import create_tables
-from scripts.load_data import load_csv_to_db, load_hue_data_to_db, load_dpm_to_db, read_excel_data, load_finrep_y_reference, load_tablestructurehierarchy  # Import aus dem Ordner 'scripts'
-from scripts.merge_data import merge_data, update_merged_data_with_dpm, match_merge_with_reference, find_correct_membername_for_reference, create_output
+from scripts.load_data import load_csv_to_db, load_hue_data_to_db, load_dpm_to_db, read_excel_data, load_finrep_y_reference, load_tablestructurehierarchy, load_hue_its  # Import aus dem Ordner 'scripts'
+from scripts.merge_data import merge_data, update_merged_data_with_dpm, match_merge_with_reference, find_correct_membername_for_reference, create_output, create_output_corep
 
 def main():
     print("Wähle eine Aktion:")
@@ -14,6 +14,7 @@ def main():
     print("8: Finrep - Reference (y-axis) hochladen")
     print("9: DPM_TableStructure hochladen/Hierachie")
     print("10: Create Output")
+    print("11: Create Corep-output")
     
 
     choice = input("Deine Auswahl: ")
@@ -25,7 +26,8 @@ def main():
         load_csv_to_db("data/ISIS-Erhebungsstammdaten1.xlsx")
         print("ISIS-Erhebungsstammdaten wurden in die Datenbank geladen.")
     elif choice == "3":
-        load_hue_data_to_db()
+        #load_hue_data_to_db()#alt
+        load_hue_its()#neu
     elif choice == "4":
         load_dpm_to_db("data/qDPM_DataPointCategorisations.csv")
     elif choice == "5":
@@ -47,6 +49,9 @@ def main():
         load_tablestructurehierarchy("data/qDPM_TableStructure.xlsx")
     elif choice == "10":
         create_output()
+    elif choice == "11":
+        create_output_corep()
+    
     else:
         print("Ungültige Auswahl.")
 
