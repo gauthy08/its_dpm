@@ -1,0 +1,4 @@
+# ITS CLI Tool Requirements
+click>=8.0.0
+pandas>=1.3.0
+sqlalchemy>=1.4.0

@@ -1,0 +1,1 @@
+Diese beiden XLSX Files gelten als Benchmark Antworten. Sie wurden mit extrahierten Legal References als Kontext erzeugt und gegen Halluzination geprüft. 
