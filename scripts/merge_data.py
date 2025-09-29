@@ -18,7 +18,7 @@ import os
 
 # Lokale Module
 from database.db_manager import SessionLocal, create_tables
-from database.models import Konzept, ITSBaseData, DPM_datapoint, Template_Finrep, MergedData
+from database.models import Template_Finrep
     
 import pickle
 import re
@@ -31,148 +31,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 
-
-def merge_data():
-    session = SessionLocal()
+from pathlib import Path
     
-    konzept_alias = aliased(Konzept)
-    its_data_alias = aliased(ITSBaseData)
 
-    query = session.query(
-        konzept_alias.id.label('konzept_id'),
-        its_data_alias.id.label('its_base_data_id'),
-        its_data_alias.konzept_code,
-        its_data_alias.datapoint,
-        its_data_alias.taxonomy_code,
-        its_data_alias.template_id,
-        its_data_alias.template_label,
-        its_data_alias.module_id,
-        its_data_alias.module_gueltig_von,
-        its_data_alias.module_gueltig_bis,
-        its_data_alias.table_id,
-        its_data_alias.table_name,
-        its_data_alias.criteria,
-        its_data_alias.x_axis_rc_code,
-        its_data_alias.x_axis_name,
-        its_data_alias.y_axis_rc_code,
-        its_data_alias.y_axis_name,
-        its_data_alias.z_axis_rc_code,
-        its_data_alias.z_axis_name
-    ).join(
-        its_data_alias, konzept_alias.code == its_data_alias.konzept_code, isouter=True
-    ).filter(
-        its_data_alias.datapoint.isnot(None)  # Filtert Zeilen, in denen 'datapoint' NULL ist
-    )
-
-    # Ergebnisse in die neue Tabelle einfügen
-    for row in query:
-        merged_entry = MergedData(
-            konzept_id=row.konzept_id,
-            datapoint = row.datapoint,
-            its_base_data_id=row.its_base_data_id,
-            konzept_code=row.konzept_code,
-            taxonomy_code=row.taxonomy_code,
-            template_id=row.template_id,
-            template_label=row.template_label,
-            module_id=row.module_id,
-            module_gueltig_von=row.module_gueltig_von,
-            module_gueltig_bis=row.module_gueltig_bis,
-            table_id=row.table_id,
-            table_name=row.table_name,
-            criteria=row.criteria,
-            x_axis_rc_code=row.x_axis_rc_code,
-            x_axis_name=row.x_axis_name,
-            y_axis_rc_code=row.y_axis_rc_code,
-            y_axis_name=row.y_axis_name,
-            z_axis_rc_code=row.z_axis_rc_code,
-            z_axis_name=row.z_axis_name
-        )
-        session.add(merged_entry)
-
-    # Änderungen speichern
-    session.commit()
-
-    print("Left Merge erfolgreich durchgeführt und Daten gespeichert.")
-    
-    
-def update_merged_data_with_dpm():
-    print("Start creating expanded MergedData rows based on DPM_datapoint")
-    session = SessionLocal()
-
-    # Aliase für die Tabellen erstellen
-    merged_alias = aliased(MergedData)
-    dpm_alias = aliased(DPM_datapoint)
-
-    # Left Join-Abfrage erstellen
-    query = session.query(
-        merged_alias,
-        dpm_alias
-    ).outerjoin(
-        dpm_alias,
-        merged_alias.datapoint == dpm_alias.datapoint_vid
-    )
-
-    # Für jede Zeile im Join Ergebnis legen wir einen neuen Eintrag in MergedData an
-    for merged_row, dpm_row in query:
-        # Falls es in DPM_datapoint keinen passenden Eintrag gibt, ist dpm_row=None
-        new_entry = MergedData(
-            # -- Felder aus dem "ursprünglichen" MergedData-Datensatz --
-            konzept_id=merged_row.konzept_id,
-            its_base_data_id=merged_row.its_base_data_id,
-            datapoint=merged_row.datapoint,
-            konzept_code=merged_row.konzept_code,
-            taxonomy_code=merged_row.taxonomy_code,
-            template_id=merged_row.template_id,
-            template_label=merged_row.template_label,
-            module_id=merged_row.module_id,
-            module_gueltig_von=merged_row.module_gueltig_von,
-            module_gueltig_bis=merged_row.module_gueltig_bis,
-            table_id=merged_row.table_id,
-            table_name=merged_row.table_name,
-            criteria=merged_row.criteria,
-            x_axis_rc_code=merged_row.x_axis_rc_code,
-            x_axis_name=merged_row.x_axis_name,
-            y_axis_rc_code=merged_row.y_axis_rc_code,
-            y_axis_name=merged_row.y_axis_name,
-            z_axis_rc_code=merged_row.z_axis_rc_code,
-            z_axis_name=merged_row.z_axis_name,
-            
-            # -- Felder aus DPM_datapoint (oder None), wenn kein Match --
-            datapoint_vid=dpm_row.datapoint_vid if dpm_row else None,
-            dimension_label=dpm_row.dimension_label if dpm_row else None,
-            member_name=dpm_row.member_name if dpm_row else None
-        )
-        session.add(new_entry)
-    
-    # Zunächst alle neuen Zeilen speichern
-    session.commit()
-    print("New rows inserted into MergedData.")
-
-    # Anschließend alle Zeilen löschen, die den String 'None' in member_name haben
-    delete_statement = text("DELETE FROM MergedData WHERE member_name IS NULL")
-    session.execute(delete_statement)
-    session.commit()
-    
-    print("Deleted all rows from MergedData where member_name IS NULL.")
-    print("Finished. Neue Zeilen wurden in MergedData erzeugt.")
-
-    
-def match_merge_with_reference():
-    session = SessionLocal()
-    try:
-        # Abfrage: SELECT * FROM MergedData ORDER BY id
-        entries = session.query(Template_Finrep).all()
-        data = []
-        for entry in entries:
-            row = entry.__dict__
-            row.pop("_sa_instance_state", None)
-            data.append(row)
-        df = pd.DataFrame(data)
-        print(df.head())
-        print(df.shape)
-        return df
-    finally:
-        session.close()
         
         
 def find_correct_membername_for_reference():
@@ -293,58 +154,7 @@ def find_correct_membername_for_reference():
     df_ref = match_merge_with_reference() 
     print(df_ref.head(1))
 
-    
-"""    
-####### Hilfsfunktionen für Create Output
-def get_its(taxonomy_code: str):
-    DATABASE_URL = "sqlite:///database.db"
-    engine = create_engine(DATABASE_URL)
-    Session = sessionmaker(bind=engine)
-    
-    session = Session()
-    try:
-        entries = (
-            session
-            .query(ITSBaseData_new)
-            .filter(ITSBaseData_new.taxonomy_code == taxonomy_code)
-            .all())
-        
-        data = [entry.__dict__ for entry in entries]
-        df = pd.DataFrame(data).drop(columns=["_sa_instance_state"], errors='ignore')
-        #print(df.head(2))
-        
-        # Zuerst nach table_id sortieren
-        df_sorted = df.sort_values(by='ko', ascending=True)
-        
-        # Dann Duplikate in konzept_code entfernen (nach Sortierung, also kleinste table_id bleibt)
-        df_unique = df_sorted.drop_duplicates(subset='ko', keep='first')
-        
-        # Ausgabe der eindeutigen table_ids, sortiert (basierend auf dem bereinigten DataFrame)
-        table_ids_sorted = sorted(df_unique['table_code'].dropna().unique())
-        print("Eindeutige table_code (aufsteigend sortiert):")
-        print(table_ids_sorted)
 
-        return df_unique[['ko', 'y_axis_rc_code', 'table_code', 'y_axis_name', 'x_axis_name', 'x_axis_rc_code']]
-    finally:
-        session.close()
-
-
-def find_node_by_componentcode(node, componentcode):
-    if node.componentcode == componentcode:
-        return node
-    for child in node.children:
-        result = find_node_by_componentcode(child, componentcode)
-        if result:
-            return result
-    return None
-
-def find_node_in_tree(roots, componentcode):
-    for root in roots:
-        result = find_node_by_componentcode(root, componentcode)
-        if result:
-            return result
-    return None
-"""
 
 
 
@@ -981,3 +791,335 @@ def create_output():
 
     return its
 
+def createUpload():
+    """
+    Neue Funktion die ähnlich wie create_output_corep() funktioniert,
+    aber RAG-Texte aus production run files bezieht.
+    """
+    print("=== CREATE UPLOAD - Production Run zu GemKonz ===")
+    
+    # SCHRITT 1: .pkl File aus tree_structures auswählen
+    tree_dir = Path("tree_structures")
+    if not tree_dir.exists():
+        print("❌ Ordner 'tree_structures' nicht gefunden!")
+        return
+    
+    pickle_files = list(tree_dir.glob("*.pkl"))
+    if not pickle_files:
+        print("❌ Keine .pkl Dateien in 'tree_structures' gefunden!")
+        return
+    
+    print(f"\n📁 Verfügbare Pickle Files:")
+    for i, file in enumerate(pickle_files, 1):
+        print(f"   {i}. {file.name}")
+    
+    try:
+        choice = int(input(f"\nWähle Pickle File (1-{len(pickle_files)}): ")) - 1
+        if not (0 <= choice < len(pickle_files)):
+            print("❌ Ungültige Auswahl")
+            return
+        selected_pickle = pickle_files[choice]
+    except ValueError:
+        print("❌ Bitte eine gültige Zahl eingeben")
+        return
+    
+    # SCHRITT 2: Taxonomy Code auswählen
+    available_taxonomies = ["FINREP_3.2.1", "COREP_3.2"]
+    print(f"\n🏷️ Verfügbare Taxonomy Codes:")
+    for i, tax in enumerate(available_taxonomies, 1):
+        print(f"   {i}. {tax}")
+    
+    try:
+        tax_choice = int(input(f"\nWähle Taxonomy Code (1-{len(available_taxonomies)}): ")) - 1
+        if not (0 <= tax_choice < len(available_taxonomies)):
+            print("❌ Ungültige Auswahl")
+            return
+        selected_taxonomy = available_taxonomies[tax_choice]
+    except ValueError:
+        print("❌ Bitte eine gültige Zahl eingeben")
+        return
+    
+    # SCHRITT 3: Production Run File auswählen
+    prod_dir = Path("evaluation_experiments/production_runs")
+    if not prod_dir.exists():
+        print("❌ Ordner 'evaluation_experiments/production_runs' nicht gefunden!")
+        return
+    
+    production_files = list(prod_dir.glob("*.xlsx"))
+    if not production_files:
+        print("❌ Keine .xlsx Dateien in 'evaluation_experiments/production_runs' gefunden!")
+        return
+    
+    print(f"\n📊 Verfügbare Production Run Files:")
+    for i, file in enumerate(production_files, 1):
+        print(f"   {i}. {file.name}")
+    
+    try:
+        prod_choice = int(input(f"\nWähle Production Run File (1-{len(production_files)}): ")) - 1
+        if not (0 <= prod_choice < len(production_files)):
+            print("❌ Ungültige Auswahl")
+            return
+        selected_production_file = production_files[prod_choice]
+    except ValueError:
+        print("❌ Bitte eine gültige Zahl eingeben")
+        return
+    
+    print(f"\n✅ Ausgewählt:")
+    print(f"   📁 Pickle File: {selected_pickle.name}")
+    print(f"   🏷️ Taxonomy: {selected_taxonomy}")
+    print(f"   📊 Production File: {selected_production_file.name}")
+    
+    # SCHRITT 4: Daten laden
+    print(f"\n🔄 Lade Daten...")
+    
+    # Baumstruktur laden
+    try:
+        with open(selected_pickle, "rb") as f:
+            trees = pickle.load(f)
+        print(f"✅ Baumstruktur geladen: {len(trees)} tree combinations")
+    except Exception as e:
+        print(f"❌ Fehler beim Laden der Baumstruktur: {e}")
+        return
+    
+    # Production Run Daten laden
+    try:
+        production_df = pd.read_excel(selected_production_file, sheet_name='Results')
+        print(f"✅ Production Run Daten geladen: {len(production_df)} responses")
+    except Exception as e:
+        print(f"❌ Fehler beim Laden der Production Run Daten: {e}")
+        return
+    
+    # ITS Daten laden
+    try:
+        its_full = get_its(selected_taxonomy)
+        print(f"✅ ITS-Daten geladen: {len(its_full)} Zeilen")
+    except Exception as e:
+        print(f"❌ Fehler beim Laden der ITS-Daten: {e}")
+        return
+    
+    # SCHRITT 5: RAG-Texte aus Production Run extrahieren
+    rag_lookup = extract_rag_from_production_run(production_df)
+    print(f"✅ RAG-Lookup erstellt: {len(rag_lookup)} Einträge")
+    
+    # SCHRITT 6: ITS-Daten mit RAG-Texten anreichern
+    enriched_its = enrich_its_with_production_rag(its_full, trees, rag_lookup)
+    
+    # SCHRITT 7: Finale Ausgabe erstellen
+    create_gemkonz_output(enriched_its, "Upload_GemKonz_output.xlsx")
+    
+    print(f"\n🎉 Upload-Pipeline abgeschlossen!")
+    print(f"📁 Output: Upload_GemKonz_output.xlsx")
+    
+    return enriched_its
+
+
+def extract_rag_from_production_run(production_df):
+    """
+    Extrahiert RAG-Texte aus Production Run Daten.
+    Erwartet node_id Format: "table_code|component_type|node_code"
+    """
+    rag_lookup = {}
+    
+    for _, row in production_df.iterrows():
+        try:
+            # node_id parsen: "table_code|component_type|node_code"
+            node_id = str(row['node_id'])
+            parts = node_id.split('|')
+            
+            if len(parts) != 3:
+                continue
+                
+            table_code, component_type, node_code = parts
+            
+            # Axis bestimmen
+            axis = "y" if "row" in component_type.lower() else "x"
+            
+            # Kurzen Table Code extrahieren
+            short_table_code = extract_table_code_prefix(table_code)
+            
+            # Key erstellen
+            key = (short_table_code, axis, node_code.zfill(4))
+            
+            # RAG-Text aus chatbot_response
+            rag_text = str(row.get('chatbot_response', ''))
+            
+            # Nur valide Antworten aufnehmen
+            if rag_text and not rag_text.startswith(('API Error', 'Error')):
+                rag_lookup[key] = rag_text
+                
+        except Exception as e:
+            # Fehlerhafte Zeilen überspringen
+            continue
+    
+    return rag_lookup
+
+
+def enrich_its_with_production_rag(its_df, trees, rag_lookup):
+    """
+    Anreicherung der ITS-Daten mit Production Run RAG-Texten
+    """
+    its = its_df.copy()
+    
+    # Statistiken
+    matches_found = {"y": 0, "x": 0}
+    rag_matches_found = {"y": 0, "x": 0}
+    
+    for idx, row in its.iterrows():
+        table_code = row['table_code']
+        
+        # Bäume finden (gleiche Logik wie in create_output_corep)
+        tree_y = None
+        tree_x = None
+        
+        its_short = extract_table_code_prefix(table_code)
+        
+        for (tree_table_code, comp_type), roots in trees.items():
+            tree_short = extract_table_code_prefix(tree_table_code)
+            
+            # Matching-Strategien
+            match_found = False
+            
+            if tree_short == its_short:
+                match_found = True
+            elif its_short in tree_short:
+                match_found = True
+            elif tree_short in its_short:
+                match_found = True
+            
+            if match_found:
+                if comp_type == "Table row":
+                    tree_y = roots
+                    matches_found["y"] += 1
+                elif comp_type == "Table column":
+                    tree_x = roots
+                    matches_found["x"] += 1
+        
+        # Y-Achse verarbeiten
+        rag_found_y = process_axis_with_production_rag(
+            its, idx, row, tree_y, 'y', 'y_axis_rc_code', rag_lookup
+        )
+        if rag_found_y:
+            rag_matches_found["y"] += 1
+        
+        # X-Achse verarbeiten
+        rag_found_x = process_axis_with_production_rag(
+            its, idx, row, tree_x, 'x', 'x_axis_rc_code', rag_lookup
+        )
+        if rag_found_x:
+            rag_matches_found["x"] += 1
+    
+    print(f"\n=== MATCHING STATISTIK ===")
+    print(f"Y-Achse Tree Matches: {matches_found['y']}, RAG Matches: {rag_matches_found['y']}")
+    print(f"X-Achse Tree Matches: {matches_found['x']}, RAG Matches: {rag_matches_found['x']}")
+    print(f"Gesamt ITS-Zeilen: {len(its)}")
+    
+    return its
+
+
+def process_axis_with_production_rag(its, idx, row, tree, axis_name, rc_code_column, rag_lookup):
+    """
+    Verarbeitung einer Achse mit Production Run RAG-Texten
+    """
+    componentcode = row[rc_code_column]
+    node = find_node_in_tree(tree, componentcode) if tree is not None else None
+    
+    # Spalten initialisieren
+    if f'{axis_name}-found_in_tree' not in its.columns:
+        its[f'{axis_name}-found_in_tree'] = None
+    if f'{axis_name}-parent_path' not in its.columns:
+        its[f'{axis_name}-parent_path'] = None
+    
+    rag_found = False
+    
+    if node:
+        try:
+            # Pfad extrahieren
+            labels = node.get_path_codes()
+            levels = node.get_level_codes()
+            componentlabel = node.get_component_label()
+            pairs = sorted(zip(levels, labels, componentlabel), key=lambda x: int(x[0]))
+            
+            # Pfad-String mit Production RAG-Texten
+            path_string_parts = []
+            table_short = extract_table_code_prefix(row['table_code'])
+            
+            for (lvl, code, comp) in pairs:
+                # RAG-Text aus Production Run Lookup
+                key = (table_short, axis_name, code.zfill(4))
+                rag_text = rag_lookup.get(key, " - ")
+                
+                if rag_text != " - ":
+                    rag_found = True
+                
+                # Format: Level, Component Label und RAG-Text
+                part_str = f'***LEVEL {lvl}*** "{comp}": {rag_text}'
+                path_string_parts.append(part_str)
+            
+            # Prefix erstellen
+            if axis_name == 'y':
+                prefix_str = (
+                    f'***Y-AXIS NAME***: {row["y_axis_name"]}  \n'
+                    f'***X-AXIS NAME***: {row["x_axis_name"]}\n\n'
+                    '***Y-AXIS***:  \n'
+                )
+            else:
+                prefix_str = '\n***X-AXIS***:  \n'
+            
+            parent_path_str = prefix_str + "  \n".join(path_string_parts)
+            its.at[idx, f'{axis_name}-found_in_tree'] = True
+            its.at[idx, f'{axis_name}-parent_path'] = parent_path_str
+            
+        except Exception as e:
+            print(f"Fehler bei der Verarbeitung von Knoten {componentcode}: {e}")
+            its.at[idx, f'{axis_name}-found_in_tree'] = False
+            its.at[idx, f'{axis_name}-parent_path'] = None
+    else:
+        its.at[idx, f'{axis_name}-found_in_tree'] = False
+        its.at[idx, f'{axis_name}-parent_path'] = None
+    
+    return rag_found
+
+
+def create_gemkonz_output(its_df, output_filename):
+    """
+    Erstellt die finale GemKonz-Output Datei
+    """
+    # Disclaimer hinzufügen
+    disclaimer_text = "\n\n*Disclaimer: This AI-generated output is for guidance only and may require further review. Please consult the referenced materials and perform your own research to ensure accuracy.*"
+    
+    def combine_paths(row):
+        y_path = row['y-parent_path'] if pd.notnull(row['y-parent_path']) else ""
+        x_path = row['x-parent_path'] if pd.notnull(row['x-parent_path']) else ""
+        combined = y_path + "\n" + x_path if y_path or x_path else ""
+        return combined + disclaimer_text if combined else disclaimer_text
+    
+    its_df['combined_path'] = its_df.apply(combine_paths, axis=1)
+    
+    # Debug-Ausgabe
+    print("\n--- Beispiel Output ---")
+    if len(its_df) > 0:
+        print(f"KO: {its_df.iloc[0]['ko']}")
+        print("Combined Path:")
+        sample_text = its_df.iloc[0]['combined_path']
+        print(sample_text[:500] + "..." if len(sample_text) > 500 else sample_text)
+    
+    # Excel-Datei erstellen
+    try:
+        if os.path.exists("Files/GemKonz_Vorlage.xlsx"):
+            df_excel = pd.read_excel("Files/GemKonz_Vorlage.xlsx", engine="openpyxl")
+        else:
+            print("Warnung: Datei 'Files/GemKonz_Vorlage.xlsx' nicht gefunden. Erstelle neue DataFrame.")
+            df_excel = pd.DataFrame()
+        
+        df_excel["Code"] = its_df["ko"]
+        df_excel["Beschreibung"] = its_df["combined_path"]
+        
+        with pd.ExcelWriter(output_filename, engine="openpyxl", mode="w") as writer:
+            df_excel.to_excel(writer, index=False, sheet_name="Sheet1")
+        
+        print(f"✅ Excel-Datei '{output_filename}' erfolgreich erstellt.")
+        
+    except Exception as e:
+        print(f"❌ Fehler beim Erstellen der Excel-Datei: {e}")
+    
+    return df_excel

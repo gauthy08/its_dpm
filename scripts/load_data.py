@@ -9,59 +9,24 @@ from .tree import Node
 
 # Lokale Module
 from database.db_manager import SessionLocal, create_tables
-from database.models import Konzept, ITSBaseData, DPM_datapoint, Template_Finrep, MergedData, Finrep_Y_reference, DPM_tableStructure, ITSBaseData_new
+from database.models import Template_Finrep, Finrep_Y_reference, DPM_tableStructure, ITSBaseData_new
 
-
-
-def load_csv_to_db(file_path):
-    # xlsx-Daten laden
-    df = pd.read_excel(file_path, sheet_name="Gemeldete Konzepte")  
-
-    # Verbindung zur Datenbank
-    session = SessionLocal()
-
-    try:
-        # DataFrame-Zeilen iterieren und in die Datenbank einfügen
-        for _, row in df.iterrows():
-            konzept = Konzept(
-                code=row['Code'],
-                smart_cube_konzept=row['Smart Cube Konzept'],
-                pflichtkonzept=bool(row['Pflichtkonzept']),
-                dimensionskombination=row['Dimensionskombination'],
-                dimensionen=row['Dimensionen'],
-                konzepttyp=row['Konzepttyp'],
-                observ_schluesselgruppe=row['OBServ-Schlüsselgruppe'],
-                scs_einschraenkung=row['SCS-Einschränkung'],
-                anubis_rechenregel=row['Anubis-Rechenregel'],
-                aggregationstyp=row['Aggregationstyp'],
-                kurzbezeichnung=row['Kurzbezeichnung'],
-                kurzbezeichnung_englisch=row['Kurzbezeichnung (englisch)'],
-                bezeichnung=row['Bezeichnung'],
-                bezeichnung_englisch=row['Bezeichnung (englisch)'],
-                beschreibung=row['Beschreibung'],
-                gueltig_von = datetime.strptime(row['Gültig von'], "%d.%m.%Y").date() if pd.notnull(row['Gültig von']) else None,
-                gueltig_bis = datetime.strptime(row['Gültig bis'], "%d.%m.%Y").date() if pd.notnull(row['Gültig bis']) else None,
-                mdi_relevant=bool(row['MDI relevant']),
-                mdi_modellierungstyp=row['MDI Modellierungstyp'],
-                erhebungsteile=row['Erhebungsteile'],
-            )
-            session.add(konzept)
-        
-        # Änderungen speichern
-        session.commit()
-    except Exception as e:
-        print(f"Fehler: {e}")
-        session.rollback()
-    finally:
-        session.close()
-
-        
 def load_hue_its():
-    hue_database = "its_analysedaten_wapr" #laut flo akuteller als its_analyse_test
+    import numpy as np
+    # Workaround für NumPy Kompatibilitätsproblem
+    np.bool = np.bool_
+    np.int = np.int_
+    np.float = np.float_
+    np.complex = np.complex_
+    np.object = np.object_
+    np.str = np.str_
+    
+    hue_database = "its_analysedaten_prod"
     table_name = "its_base_data"
-    """
-    Lädt Daten aus HUE und schreibt sie in die SQL-Datenbank.
-    """
+    
+    print(f"📊 Starte Datenabfrage aus {hue_database}.{table_name}")
+    print("=" * 60)
+    
     # Spark-Session initialisieren
     spark = SparkSession.builder\
         .appName("hwc-app")\
@@ -73,140 +38,116 @@ def load_hue_its():
                 "serviceDiscoveryMode=zooKeeper;zooKeeperNamespace=hiveserver2;trustStoreType=jks;ssl=true")\
         .config("spark.yarn.historyServer.address", "https://anucdp-mgmt-02.w.oenb.co.at")\
         .config("spark.sql.hive.hiveserver2.jdbc.url.principal", "hive/_HOST@AD.OENB.CO.AT")\
+        .config("spark.hadoop.yarn.resourcemanager.principal", "hive")\
+        .config("spark.kryo.registrator", "com.qubole.spark.hiveacid.util.HiveAcidKyroRegistrator")\
+        .config("spark.sql.extensions", "com.qubole.spark.hiveacid.HiveAcidAutoConvertExtension")\
         .config("spark.jars",
                 "/runtime-addons/spark332-7190-1202-b75-ht9wmb/opt/spark/optional-lib/hive-warehouse-connector-assembly.jar")\
         .getOrCreate()
 
-    # HiveWarehouseSession initialisieren
-    hwc = HiveWarehouseSession.session(spark).build()
-    hwc.setDatabase(hue_database)
+    print("✅ Spark Session erstellt")
 
-    # Daten aus HUE abfragen
-    filtered_rows = hwc.sql(f"SELECT * FROM {hue_database}.{table_name}")
-    data = filtered_rows.collect()
-
-    # In Pandas DataFrame umwandeln
-    pandas_df = pd.DataFrame([row.asDict() for row in data], columns=filtered_rows.columns)
-
-    #Ausgabe der bestehenden Taxanomy codes 
-    print("Es bestehen folgende Taxonomy Codes: ")
-    print(pandas_df["taxonomy_code"].unique().tolist())
-    print("In diesem Schritt werden lediglich Einträge von FINREP_3.2.1 und COREP_3.2 geladen")
-    
-    #filter auf FINREP_3.2.1 COREP_3.2
-    pandas_df = pandas_df[pandas_df["taxonomy_code"].isin(["FINREP_3.2.1", "COREP_3.2"])]
-
-    
-    # Verbindung zur Datenbank herstellen
-    session = SessionLocal()
     try:
-        # DataFrame-Zeilen iterieren und in die Datenbank einfügen
-        for _, row in pandas_df.iterrows():
-            its_data = ITSBaseData_new(
-                datapoint=row['datapoint'],
-                ko=row['ko'],
-                taxonomy_code=row['taxonomy_code'],
-                template_code=row['template_code'],
-                template_label=row['template_label'],
-                module_code=row['module_code'],
-                module_gueltig_von=row['module_gueltig_von'] if pd.notnull(row['module_gueltig_von']) else None,
-                module_gueltig_bis=row['module_gueltig_bis'] if pd.notnull(row['module_gueltig_bis']) else None,
-                table_code=row['table_code'],
-                table_name=row['table_name'],
-                criteria=row['criteria'],
-                x_axis_rc_code=row['x_axis_rc_code'],
-                x_axis_name=row['x_axis_name'],
-                y_axis_rc_code=row['y_axis_rc_code'],
-                y_axis_name=row['y_axis_name'],
-                z_axis_rc_code=row['z_axis_rc_code'],
-                z_axis_name=row['z_axis_name']
-            )
-            session.add(its_data)
+        # HiveWarehouseSession initialisieren
+        hwc = HiveWarehouseSession.session(spark).build()
+        print("✅ HiveWarehouseSession initialisiert")
 
-        # Änderungen speichern
-        session.commit()
-        print("Daten erfolgreich in die Datenbank geschrieben.")
-    except Exception as e:
-        print(f"Fehler beim Schreiben in die Datenbank: {e}")
-        session.rollback()
-    finally:
-        session.close()
+        # Direkt gefilterte Daten abfragen - NUR die zwei gewünschten Taxonomy Codes
+        sql_query = f"""
+        SELECT * 
+        FROM {hue_database}.{table_name}
+        WHERE taxonomy_code IN ('FINREP_3.2.1', 'COREP_3.2')
+        """
         
+        print(f"📝 Führe gefilterte Query aus (nur FINREP_3.2.1 und COREP_3.2)")
+        
+        # DataFrame erstellen
+        filtered_df = hwc.sql(sql_query)
+        
+        # Anzahl der Zeilen prüfen
+        row_count = filtered_df.count()
+        print(f"📊 Gefundene Zeilen: {row_count}")
+        
+        # Alternative Methode: Daten mit collect() sammeln und dann zu Pandas konvertieren
+        print("🔄 Sammle Daten...")
+        data = filtered_df.collect()
+        
+        print("🔄 Konvertiere zu Pandas DataFrame...")
+        # Manuelle Konvertierung zu Pandas DataFrame
+        pandas_df = pd.DataFrame([row.asDict() for row in data])
+        
+        print(f"✅ Daten erfolgreich geladen: {len(pandas_df)} Zeilen")
+        
+        # Zur Kontrolle: Welche Taxonomy Codes sind tatsächlich vorhanden
+        unique_taxonomies = pandas_df["taxonomy_code"].unique().tolist()
+        print(f"📋 Geladene Taxonomy Codes: {unique_taxonomies}")
 
-def load_hue_data_to_db():
-    hue_database = "its_analyse_test"
-    table_name = "its_base_data"
-    """
-    Lädt Daten aus HUE und schreibt sie in die SQL-Datenbank.
-    """
-    # Spark-Session initialisieren
-    spark = SparkSession.builder\
-        .appName("hwc-app")\
-        .config("spark.security.credentials.hiveserver2.enabled", "false")\
-        .config("spark.datasource.hive.warehouse.read.via.llap", "false")\
-        .config("spark.datasource.hive.warehouse.read.jdbc.mode", "client")\
-        .config("spark.sql.hive.hiveserver2.jdbc.url",
-                "jdbc:hive2://anucdp-mgmt-01.w.oenb.co.at:2181,anucdp-mgmt-02.w.oenb.co.at:2181,anucdp-mgmt-03.w.oenb.co.at:2181/;"
-                "serviceDiscoveryMode=zooKeeper;zooKeeperNamespace=hiveserver2;trustStoreType=jks;ssl=true")\
-        .config("spark.yarn.historyServer.address", "https://anucdp-mgmt-02.w.oenb.co.at")\
-        .config("spark.sql.hive.hiveserver2.jdbc.url.principal", "hive/_HOST@AD.OENB.CO.AT")\
-        .config("spark.jars",
-                "/runtime-addons/spark332-7190-1202-b75-ht9wmb/opt/spark/optional-lib/hive-warehouse-connector-assembly.jar")\
-        .getOrCreate()
+        # Verbindung zur Datenbank
+        session = SessionLocal()
+        try:
+            count_existing = session.query(ITSBaseData_new).count()
+            if count_existing > 0:
+                print(f"⚠️  Achtung: Es sind bereits {count_existing} Einträge in der Tabelle vorhanden.")
+                user_input = input("Möchtest du die Tabelle löschen (l), nur neue Daten einfügen (n), oder den Vorgang abbrechen (a)? [l/n/a]: ").lower()
 
-    # HiveWarehouseSession initialisieren
-    hwc = HiveWarehouseSession.session(spark).build()
-    hwc.setDatabase(hue_database)
+                if user_input == "a":
+                    print("❌ Vorgang abgebrochen.")
+                    return
 
-    # Daten aus HUE abfragen
-    filtered_rows = hwc.sql(f"SELECT * FROM {hue_database}.{table_name}")
-    data = filtered_rows.collect()
+                elif user_input == "l":
+                    print("🔄 Lösche vorhandene Daten...")
+                    session.query(ITSBaseData_new).delete()
+                    session.commit()
 
-    # In Pandas DataFrame umwandeln
-    pandas_df = pd.DataFrame([row.asDict() for row in data], columns=filtered_rows.columns)
+                elif user_input != "n":
+                    print("❌ Ungültige Eingabe – Vorgang wird abgebrochen.")
+                    return
 
-    #Ausgabe der bestehenden Taxanomy codes 
-    print("Es bestehen folgende Taxonomy Codes: ")
-    print(pandas_df["taxonomy_code"].unique().tolist())
-    print("In diesem Schritt werden lediglich Einträge von FINREP_3.2.1 geladen")
-    
-    #Filter auf FINREP_3.2.1
-    pandas_df = pandas_df[pandas_df["taxonomy_code"] == "FINREP_3.2.1"]
-    
-    # Verbindung zur Datenbank herstellen
-    session = SessionLocal()
-    try:
-        # DataFrame-Zeilen iterieren und in die Datenbank einfügen
-        for _, row in pandas_df.iterrows():
-            its_data = ITSBaseData(
-                datapoint=row['datapoint'],
-                konzept_code=row['konzept_code'],
-                taxonomy_code=row['taxonomy_code'],
-                template_id=row['template_id'],
-                template_label=row['template_label'],
-                module_id=row['module_id'],
-                module_gueltig_von=row['module_gueltig_von'] if pd.notnull(row['module_gueltig_von']) else None,
-                module_gueltig_bis=row['module_gueltig_bis'] if pd.notnull(row['module_gueltig_bis']) else None,
-                table_id=row['table_id'],
-                table_name=row['table_name'],
-                criteria=row['criteria'],
-                x_axis_rc_code=row['x_axis_rc_code'],
-                x_axis_name=row['x_axis_name'],
-                y_axis_rc_code=row['y_axis_rc_code'],
-                y_axis_name=row['y_axis_name'],
-                z_axis_rc_code=row['z_axis_rc_code'],
-                z_axis_name=row['z_axis_name']
-            )
-            session.add(its_data)
+            # Daten einfügen
+            print(f"💾 Füge {len(pandas_df)} Zeilen in die Datenbank ein...")
+            
+            for idx, row in pandas_df.iterrows():
+                if idx % 1000 == 0:  # Progress-Anzeige alle 1000 Zeilen
+                    print(f"   Verarbeite Zeile {idx}/{len(pandas_df)}...")
+                    
+                its_data = ITSBaseData_new(
+                    datapoint=row['datapoint'],
+                    ko=row['ko'],
+                    taxonomy_code=row['taxonomy_code'],
+                    template_code=row['template_code'],
+                    template_label=row['template_label'],
+                    module_code=row['module_code'],
+                    module_gueltig_von=row['module_gueltig_von'] if pd.notnull(row['module_gueltig_von']) else None,
+                    module_gueltig_bis=row['module_gueltig_bis'] if pd.notnull(row['module_gueltig_bis']) else None,
+                    table_code=row['table_code'],
+                    table_name=row['table_name'],
+                    criteria=row['criteria'],
+                    x_axis_rc_code=row['x_axis_rc_code'],
+                    x_axis_name=row['x_axis_name'],
+                    y_axis_rc_code=row['y_axis_rc_code'],
+                    y_axis_name=row['y_axis_name'],
+                    z_axis_rc_code=row['z_axis_rc_code'],
+                    z_axis_name=row['z_axis_name']
+                )
+                session.add(its_data)
 
-        # Änderungen speichern
-        session.commit()
-        print("Daten erfolgreich in die Datenbank geschrieben.")
+            session.commit()
+            print("✅ Daten erfolgreich in die Datenbank geschrieben.")
+            
+        except Exception as e:
+            print(f"❌ Fehler beim Schreiben in die Datenbank: {e}")
+            session.rollback()
+        finally:
+            session.close()
+            
     except Exception as e:
-        print(f"Fehler beim Schreiben in die Datenbank: {e}")
-        session.rollback()
+        print(f"❌ Fehler bei der Datenabfrage: {e}")
     finally:
-        session.close()
+        # Spark Session schließen
+        spark.stop()
+        print("🔒 Spark Session geschlossen")
+
+
         
         
 # Funktion zum Laden der Daten aus der CSV-Datei und Schreiben in die Datenbank
@@ -331,34 +272,43 @@ def load_finrep_y_reference(file_path):
     finally:
         session.close()
 
-def load_tablestructurehierarchy(file_path):
+        
+
+import os
+import pandas as pd
+import pickle
+
+def load_tablestructurehierarchy(file_path, taxonomy_code="COREP 3.2"):
     """
     Liest die qDPM_TableStructure aus der Excel-Datei ein und erzeugt 
-    für jeden TableCode (nur FINREP 3.2.1) 
+    für jeden TableCode (filtert nach gewähltem TaxonomyCode) 
     jeweils zwei Bäume: 
       - Einen für ComponentTypeName = 'Table row'
       - Einen für ComponentTypeName = 'Table column'
-
     Speichert alle Bäume in einem Dictionary und 
-    serialisiert dieses Dictionary mit Pickle.
+    serialisiert dieses Dictionary mit Pickle im Ordner "tree_structures".
+    
+    Args:
+        file_path (str): Pfad zur Excel-Datei
+        taxonomy_code (str): TaxonomyCode zum Filtern (z.B. "FINREP 3.2.1", "COREP 3.2")
     """
     print(f"Lade Datei: {file_path}")
+    print(f"Verwende TaxonomyCode: {taxonomy_code}")
     
     # 1) Vollständige Tabelle laden
     df = pd.read_excel(file_path, sheet_name="qDPM_TableStructure",
                        dtype={'ComponentCode': str, 'Level': str, 'x_axis_rc_code': str, 'y_axis_rc_code': str})
     
-    # 2) Nach TaxonomyCode = "FINREP 3.2.1" filtern
-    #df = df[df['TaxonomyCode'] == "FINREP 3.2.1"]
-    df = df[df['TaxonomyCode'] == "COREP 3.2"]
-
+    # 2) Nach gewähltem TaxonomyCode filtern
+    df = df[df['TaxonomyCode'] == taxonomy_code]
+    
     # 3) Alle relevanten TableCodes ermitteln
     all_table_codes = df['TableCode'].unique()
-
+    
     # 4) Dictionary, in dem später alle Bäume gespeichert werden:
     #    Key: (table_code, component_type), Value: Liste von Wurzelknoten (roots)
     all_trees = {}
-
+    
     # 5) Für jeden TableCode jeweils 'Table row' UND 'Table column' verarbeiten
     for table_code in all_table_codes:
         for comp_type in ['Table row', 'Table column']:
@@ -394,32 +344,39 @@ def load_tablestructurehierarchy(file_path):
                     parentordinateide   = parent_id
                 )
                 nodes[row["OrdinateID"]] = node
-
+                
             # 5b) Eltern-Kind-Beziehungen setzen
             for node in nodes.values():
                 parent_id = node.parentordinateide
                 if parent_id in nodes:
                     node.parent = nodes[parent_id]
                     nodes[parent_id].children.append(node)
-
+                    
             # 5c) Wurzelknoten ermitteln (Nodes ohne Parent)
             roots = [n for n in nodes.values() if n.parent is None]
-
+            
             # 5d) Im Dictionary speichern
             all_trees[(table_code, comp_type)] = roots
-
+    
     # 6) Optional: Beispielausgabe
     #    Man könnte zum Testen z.B. mal alle Keys (TableCode, ComponentType) ausgeben
     print(f"\nErzeugte Bäume für folgende (TableCode, ComponentType)-Kombinationen:")
     for k in all_trees.keys():
         print("  ", k)
-
-    # 7) Alles in ein einziges Pickle-File schreiben
-    pickle_path = "baumstruktur_COREP_3_2.pkl"
+    
+    # 7) Ordner "tree_structures" erstellen, falls er nicht existiert
+    tree_structures_dir = "tree_structures"
+    os.makedirs(tree_structures_dir, exist_ok=True)
+    
+    # 8) Dateiname basierend auf TaxonomyCode generieren
+    # Leerzeichen und Punkte durch Unterstriche ersetzen für gültigen Dateinamen
+    safe_taxonomy_name = taxonomy_code.replace(" ", "_").replace(".", "_")
+    pickle_filename = f"baumstruktur_{safe_taxonomy_name}.pkl"
+    pickle_path = os.path.join(tree_structures_dir, pickle_filename)
     with open(pickle_path, "wb") as f:
         pickle.dump(all_trees, f)
+    
     print(f"\nAlle Bäume wurden in '{pickle_path}' gespeichert.")
-
     return all_trees
         
     
