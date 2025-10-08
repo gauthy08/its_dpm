@@ -53,7 +53,8 @@ class Finrep_Y_reference(Base):
     reference = Column(String)
     extra = Column(String)
     rag_text = Column(String)
-    
+
+
 class DPM_tableStructure(Base):
     __tablename__ = 'DPM_tableStructure'
     

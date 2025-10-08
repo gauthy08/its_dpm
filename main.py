@@ -1,5 +1,5 @@
 from database.db_manager import create_tables
-from scripts.load_data import load_dpm_to_db, read_excel_data, load_finrep_y_reference, load_tablestructurehierarchy, load_hue_its
+from scripts.load_data import load_dpm_to_db, read_excel_data, load_finrep_y_reference, load_tablestructurehierarchy, load_hue_its, extract_corep_annex
 from scripts.merge_data import find_correct_membername_for_reference, create_output, create_output_corep, createUpload
 from scripts.chatbot import process_pickle_tree_with_chatbot, view_production_results  # Production imports
 from grid_search import run_hyperparameter_grid_search
@@ -16,10 +16,12 @@ def main():
     print("2: ITS Base Data laden/load_hue_its()")
     print("3: DPM_TableStructure hochladen/Hierachie")
     print("4: 🚀 PRODUCTION: ChatBot-Beschreibungen generieren")
-    print("5: 📊 Production Results anzeigen")
-    print("6: 🔍 LLM Judge - Benchmark Vergleich")
-    print("7: 📤 CREATE UPLOAD: Production Run zu GemKonz")
-    print("8: 🔬 GRID SEARCH: Hyperparameter Testing")
+    print("5: 🚀 Extract Corep - Annex 5")
+    
+    print("5?: 📊 Production Results anzeigen")
+    print("6?a: 🔍 LLM Judge - Benchmark Vergleich")
+    print("7?a: 📤 CREATE UPLOAD: Production Run zu GemKonz")
+    print("8?: 🔬 GRID SEARCH: Hyperparameter Testing")
     
     #print("23: ?DPM Daten laden")
     #print("25: ?Finrep-Reference Daten laden")
@@ -86,7 +88,15 @@ def main():
         else:
             print("❌ Invalid choice!")
     
+    
     elif choice == "5":
+        print("\n" + "="*60)
+        print("Extract Corep - Annex 5")
+        print("="*60)
+        extract_corep_annex()
+        #view_production_results()
+    
+    elif choice == "5?":
         print("\n" + "="*60)
         print("PRODUCTION RESULTS VIEWER")
         print("="*60)
