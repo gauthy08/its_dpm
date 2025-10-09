@@ -1,7 +1,8 @@
 from database.db_manager import create_tables
-from scripts.load_data import load_dpm_to_db, read_excel_data, load_finrep_y_reference, load_tablestructurehierarchy, load_hue_its, extract_corep_annex
+from scripts.load_data import load_dpm_to_db, read_excel_data, load_finrep_y_reference, load_tablestructurehierarchy, load_hue_its
 from scripts.merge_data import find_correct_membername_for_reference, create_output, create_output_corep, createUpload
 from scripts.chatbot import process_pickle_tree_with_chatbot, view_production_results  # Production imports
+from scripts.extract_corep_annex import extract_corep_annex
 from grid_search import run_hyperparameter_grid_search
 import pandas as pd
 import requests

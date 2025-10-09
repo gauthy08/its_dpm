@@ -6,6 +6,9 @@ from pyspark.sql import SparkSession
 from pyspark_llap import HiveWarehouseSession
 import pickle
 from .tree import Node
+from scripts.extract_corep_annex import extract_corep_annex
+
+
 
 # Lokale Module
 from database.db_manager import SessionLocal, create_tables
@@ -378,6 +381,3 @@ def load_tablestructurehierarchy(file_path, taxonomy_code="COREP 3.2"):
     
     print(f"\nAlle Bäume wurden in '{pickle_path}' gespeichert.")
     return all_trees
-        
-def extract_corep_annex():
-    print("COREP EXTRACT")
