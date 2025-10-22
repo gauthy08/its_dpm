@@ -1,7 +1,7 @@
 ## ITS datapoint description/data catalogue 
 
 # Beschreibung
-Mit diesem Projekt wird mit Hilfe des OeNB Chatbots Beschreibungen für ITS Datenpunkte generiert, welche im Anschluss an ISIS und infolgedessen an den Datenkatalog hochgeladen werden. 
+Mit diesem Projekt wird mit Hilfe des OeNB Chatbots Beschreibungen für ITS Datenpunkte generiert, welche im Anschluss an ISIS und infolgedessen an den Datenkatalog hochgeladen werden können. 
 
 # Voraussetzung
 Mit den folgenden Einstellungen sollte das Projekt ausführbar sein
@@ -12,14 +12,16 @@ Spark 3.3.2 - CDP 7.1.9.0
 # Benutzung
 Start:
 im Terminal "python main.py" aufrufen. Dann wird ein "Menü" angezeicht mit verfügbaren Funktionen. 
+Potenzielles to Do: main.py aufräumen. Einige Funktionen, z.B. hinsichtlich "LLM as a Judge" könnte man auch in ein anderes File geben.  
 
 ## 1: Tabellen erstellen/create_tables()
 Das Projekt beinhaltet eine eigene kleine Datenbank databank.db mit sqlalchemy. Falls man diese komplett löscht, können die Tabellen neu erstellt werden. Ist aber im Standardfall nicht notwendig. Kann man also grundsätzlich ignorieren, sondern muss/kann nur ausgeführt werden, wenn man bei "Null" beginnt. 
-Noch offenes TO DO: entferne Tabellen nicht mehr gebraucht werden. 
+Potenzielles to Do: nicht benötigte Tabellen löschen
 
 ## 2: ITS Base Data laden/load_hue_its()
 Diese Funktion lädt ITS-Basisdaten aus der Hive-Datenbank its_analysedaten_prod über eine SparkSession mit HiveWarehouseConnector. Die Daten werden direkt bei der Abfrage auf die zwei relevanten Taxonomy-Codes FINREP_3.2.1 und COREP_3.2 gefiltert, um die Datenmenge zu reduzieren (ca. 81.000 Zeilen). Nach der Abfrage werden die Spark-DataFrames in Pandas DataFrames konvertiert und anschließend in die lokale SQL-Datenbank-Tabelle ITSBaseData_new geschrieben. Die Funktion bietet dabei interaktive Optionen zum Umgang mit bereits vorhandenen Daten (löschen, hinzufügen oder abbrechen) und zeigt während des gesamten Prozesses Fortschrittsmeldungen an. Ein NumPy-Kompatibilitäts-Workaround sorgt für die reibungslose Konvertierung zwischen älteren PySpark- und neueren NumPy-Versionen.
-Muss nicht immer ausgeführt werden, da die Daten ja in der Projekt-Datenbank erhalten bleiben. Muss nur durchgeführt werden, wenn beispielsweise ein neues Framework (Finrep oder Corep) verwendet wird. 
+Muss nicht immer ausgeführt werden, da die Daten ja in der Projekt-Datenbank erhalten bleiben. Muss nur durchgeführt werden, wenn beispielsweise ein neues Framework (Finrep oder Corep) verwendet wird.
+Potenzielles to Do: Taxonomy Code sind aktuell hard gecodet. Kann man flexibler gestalten. 
 
 ## 3: DPM_TableStructure hochladen/Hierachie
 `load_tablestructurehierarchy(file_path)` konvertiert flache Excel-Tabellenstrukturen (qDPM_TableStructure) aus dem Ordner "data" in hierarchische Baumstrukturen für z.B. COREP 3.2 Regulatory Reporting. Erstellt für jeden TableCode zwei separate Bäume - einen für Zeilen ("Table row") und einen für Spalten ("Table column") - basierend auf den Parent-Child-Beziehungen über OrdinateID/ParentOrdinateID. Serialisiert alle generierten Baumstrukturen als Dictionary in eine Pickle-Datei (baumstruktur_XXX.pkl) im Ordner tree_structures für spätere Verwendung. Diese Baumstrukturen werden genutzt, um hierarchische Kontexte für die RAG-basierte Textgenerierung zu erstellen - jeder Datenpunkt kann so mit seinem vollständigen hierarchischen Pfad beschrieben werden.

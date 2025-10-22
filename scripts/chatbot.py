@@ -14,7 +14,11 @@ CONFIG = {
     'web_ui_token': 'sk-15b54c10119c45f7a45e790a109d7c8b',
     'model_name': 'chatbot-mistral',
     'web_ui_base_url': 'https://chatbot-open-webui.apps.prod.w.oenb.co.at/',
-    'knowledge_id': 'aace4dfd-3f4f-46da-9936-b38dc133e3e9',  # ITS AI USE CASE (COREP)
+    #'knowledge_id': 'aace4dfd-3f4f-46da-9936-b38dc133e3e9',  # ITS AI USE CASE (COREP)
+    'knowledge_bases': {
+        'COREP_3_2': 'aace4dfd-3f4f-46da-9936-b38dc133e3e9',      # CRR Knowledge Base
+        'FINREP_3_2_1': '08c5ec92-e537-4dff-b036-302657b11573'    # FINREP Knowledge Base
+    },
 
 
     # 🆕 ULTRA CONSERVATIVE LLM parameters - Anti-Hallucination
@@ -32,6 +36,31 @@ CONFIG = {
     'output_dir': 'evaluation_experiments',
     'timeout': 60
 }
+
+
+def get_knowledge_id_for_taxonomy(taxonomy_code):
+    """Get the appropriate knowledge base ID for a given taxonomy"""
+    
+    # Normalize taxonomy code (handle both formats)
+    taxonomy_map = {
+        'COREP_3_2': 'aace4dfd-3f4f-46da-9936-b38dc133e3e9',
+        'COREP_3.2': 'aace4dfd-3f4f-46da-9936-b38dc133e3e9',
+        'FINREP_3_2_1': '08c5ec92-e537-4dff-b036-302657b11573',
+        'FINREP_3.2.1': '08c5ec92-e537-4dff-b036-302657b11573',
+    }
+    
+    # Standardize the input (replace dots with underscores for consistency)
+    normalized = taxonomy_code.replace('.', '_')
+    
+    if normalized in taxonomy_map:
+        kb_id = taxonomy_map[normalized]
+        print(f"✅ Using Knowledge Base for {taxonomy_code}: {kb_id}")
+        return kb_id
+    else:
+        print(f"⚠️ Taxonomy '{taxonomy_code}' not found, using default COREP Knowledge Base")
+        return 'aace4dfd-3f4f-46da-9936-b38dc133e3e9'  # Default
+
+
 
 PRODUCTION_PROMPT_old = """You are a precise regulatory reporting assistant specialized in interpreting ITS templates and CRR-related data points. Your task is to explain data points using ONLY the provided context from your knowledge base.
 
@@ -277,7 +306,7 @@ def extract_nodes_with_filter(all_trees, filter_config, verbose=True):
     return pd.DataFrame(all_nodes_data)
 
 def call_chatbot_api(prompt, config):
-    """Enhanced chatbot API call with optional LLM parameter control"""
+    """Enhanced chatbot API call with optional LLM parameter control and dynamic knowledge base selection"""
     url = f"{config['web_ui_base_url']}api/chat/completions"
     
     headers = {
@@ -299,9 +328,21 @@ def call_chatbot_api(prompt, config):
     else:
         print(f"🔧 Using Standard (default) parameters")
     
-    # Add knowledge base
-    if config.get('knowledge_id'):
-        payload["files"] = [{'type': 'collection', 'id': config['knowledge_id']}]
+    # 🆕 Add knowledge base - dynamically selected
+    # Priority: _current_knowledge_id > knowledge_id (backwards compatibility) > knowledge_bases
+    knowledge_id = None
+    
+    if config.get('_current_knowledge_id'):
+        knowledge_id = config['_current_knowledge_id']
+        print(f"📚 Using dynamically set knowledge base: {knowledge_id}")
+    elif config.get('knowledge_id'):
+        knowledge_id = config['knowledge_id']
+        print(f"📚 Using static knowledge base: {knowledge_id}")
+    
+    if knowledge_id:
+        payload["files"] = [{'type': 'collection', 'id': knowledge_id}]
+    else:
+        print(f"⚠️ No knowledge base configured - running without RAG context")
     
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=config['timeout'])

@@ -1,0 +1,19 @@
+COREP ANNEX DESCRIPTION GENERATION - SUMMARY
+============================================================
+
+Mode: ✅ FULL RUN
+Timestamp: 2025-10-16T08:25:52.766659
+Total Items: 1259
+Total Tables: 52
+Rows: 733
+Columns: 526
+
+LLM Parameters:
+  - temperature: 0.0
+  - max_tokens: 150
+  - top_p: 0.5
+  - presence_penalty: 0.3
+  - frequency_penalty: 0.3
+
+Average Response Length: 530 chars
+Average Processing Time: 3.85s

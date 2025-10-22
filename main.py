@@ -65,17 +65,34 @@ def main():
         
         sub_choice = input("\nChoose taxonomy (1-3): ")
         
+        sub_choice = input("\nChoose taxonomy (1-3): ")
+    
         if sub_choice == "1":
-            print("🔄 Loading COREP_3_2 for production...")
-            result_df = process_pickle_tree_with_chatbot(taxonomy_code="COREP_3_2")
+            taxonomy_code = "COREP_3_2"
+            print(f"🔄 Loading {taxonomy_code} for production...")
+
+            # 🆕 Set the correct knowledge base for this taxonomy
+            from scripts.chatbot import CONFIG, get_knowledge_id_for_taxonomy
+            kb_id = get_knowledge_id_for_taxonomy(taxonomy_code)
+            CONFIG['_current_knowledge_id'] = kb_id
+
+            result_df = process_pickle_tree_with_chatbot(taxonomy_code=taxonomy_code)
             if result_df is not None:
                 print(f"✅ Production completed. {len(result_df)} nodes processed.")
-                
+
         elif sub_choice == "2":
-            print("🔄 Loading FINREP_3_2_1 for production...")
-            result_df = process_pickle_tree_with_chatbot(taxonomy_code="FINREP_3_2_1")
+            taxonomy_code = "FINREP_3_2_1"
+            print(f"🔄 Loading {taxonomy_code} for production...")
+
+            # 🆕 Set the correct knowledge base for this taxonomy
+            from scripts.chatbot import CONFIG, get_knowledge_id_for_taxonomy
+            kb_id = get_knowledge_id_for_taxonomy(taxonomy_code)
+            CONFIG['_current_knowledge_id'] = kb_id
+
+            result_df = process_pickle_tree_with_chatbot(taxonomy_code=taxonomy_code)
             if result_df is not None:
                 print(f"✅ Production completed. {len(result_df)} nodes processed.")
+
                 
         elif sub_choice == "3":
             custom_path = input("Enter path to pickle file: ")
