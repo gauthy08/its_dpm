@@ -12,7 +12,7 @@ Spark 3.3.2 - CDP 7.1.9.0
 # Benutzung
 Start:
 im Terminal "python main.py" aufrufen. Dann wird ein "Menü" angezeicht mit verfügbaren Funktionen. 
-Potenzielles to Do: main.py aufräumen. Einige Funktionen, z.B. hinsichtlich "LLM as a Judge" könnte man auch in ein anderes File geben.  
+Potenzielles to Do: Code in main.py aufräumen. Einige Funktionen, z.B. hinsichtlich "LLM as a Judge" könnte man auch in ein anderes File geben.  
 
 ## 1: Tabellen erstellen/create_tables()
 Das Projekt beinhaltet eine eigene kleine Datenbank databank.db mit sqlalchemy. Falls man diese komplett löscht, können die Tabellen neu erstellt werden. Ist aber im Standardfall nicht notwendig. Kann man also grundsätzlich ignorieren, sondern muss/kann nur ausgeführt werden, wenn man bei "Null" beginnt. 

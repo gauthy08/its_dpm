@@ -38,7 +38,7 @@ python db_cli.py search its "F 01.01" --field template_code
 python db_cli.py search its "FINREP" --field taxonomy_code
 ```
 
-### Multi-Filter Suche (NEU!)
+### Multi-Filter Suche 
 ```bash
 # Kombiniere mehrere Filter
 python db_cli.py filter its --taxonomy FINREP --template "F 01.01"
